@@ -89,7 +89,7 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
 
   useEffect(() => {
     const jsonObj = {
-      titel,
+      title: titel,
       vat: parseFloat(vat),
       lineItems,
       totalAmount,
@@ -110,7 +110,7 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
 
   const callCreateInvoice = async (receiverKeyBytes32, encryptedData) => {
     if (!window.ethereum) {
-      alert("MetaMask ist nicht installiert.");
+      alert("MetaMask is not installed.");
       return;
     }
     try {
@@ -120,7 +120,7 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
       });
     } catch (switchError) {
       if (switchError.code === 4902) {
-        alert("Bitte füge das Monbase Alpha Netzwerk zu MetaMask hinzu.");
+        alert("Please add the Monbase Alpha network to MetaMask.");
         return;
       }
     }
@@ -143,9 +143,9 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
         const receiverKeyInBytes = base64ToBytes32Hex(receiverPubKey); 
 
         await callCreateInvoice(receiverKeyInBytes, encryptedDataBuffer);
-        alert("Invoice erstellt, verschlüsselt und an den Smart Contract gesendet!");
+        alert("Invoice created, encrypted and sent to the smart contract!");
       } catch (err) {
-        alert("Fehler beim Erstellen oder Senden: " + (err?.message || err));
+        alert("Error creating or sending: " + (err?.message || err));
       }
     }
   };
@@ -175,13 +175,13 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
           {errors.receiverPubKey && <span style={{ color: 'red' }}>{errors.receiverPubKey}</span>}
         </div>
         <div style={{ width: '100%', marginTop: 12 }}>
-          <label>Titel</label><br />
+          <label>Title</label><br />
           <input
             type="text"
             value={titel}
             onChange={e => setTitel(e.target.value)}
             style={{ width: '100%' }}
-            placeholder="Titel der Rechnung"
+            placeholder="Invoice title"
           />
         </div>
         <div style={{ width: '100%', marginTop: 12 }}>
@@ -191,9 +191,9 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
             onChange={e => setVat(e.target.value)}
             style={{ width: '100%' }}
           >
-            <option value="8.1">8,1%</option>
-            <option value="2.6">2,6%</option>
-            <option value="3.8">3,8%</option>
+            <option value="8.1">8.1%</option>
+            <option value="2.6">2.6%</option>
+            <option value="3.8">3.8%</option>
           </select>
         </div>
         <div style={{ width: '100%', marginTop: 20 }}>
@@ -204,14 +204,14 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
               <span style={{ width: 24 }}>{item.index + 1}.</span>
               <input
                 type="text"
-                placeholder="Beschreibung"
+                placeholder="Description"
                 value={item.text}
                 onChange={e => updateLineItem(idx, 'text', e.target.value)}
                 style={{ flex: 2 }}
               />
               <input
                 type="number"
-                placeholder="Preis"
+                placeholder="Price"
                 value={item.preis}
                 onChange={e => updateLineItem(idx, 'preis', e.target.value)}
                 style={{ width: 80 }}
@@ -240,7 +240,7 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
           />
           {errors.jsonData && <span style={{ color: 'red' }}>{errors.jsonData}</span>}
         </div>
-        <button type="submit" style={{ padding: '10px 20px', fontSize: '16px', marginTop: 20 }}>create Invoice</button>
+        <button type="submit" style={{ padding: '10px 20px', fontSize: '16px', marginTop: 20 }}>Create Invoice</button>
       </form>
     </div>
   )

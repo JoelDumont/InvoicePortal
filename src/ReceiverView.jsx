@@ -31,7 +31,7 @@ const CONTRACT_ABI = [
   }
 ];
 
-export default function RecipientView({ account, connectMetaMask }) {
+export default function ReceiverView({ account, connectMetaMask }) {
   const [publicKey, setPublicKey] = useState('');
   const [invoices, setInvoices] = useState([]);
   const [decrypted, setDecrypted] = useState({});
@@ -48,15 +48,15 @@ export default function RecipientView({ account, connectMetaMask }) {
   }
 
   async function getInvoicesForReceiver(receiverKeyHex, start = 0, count = 20) {
-    if (!window.ethereum) throw new Error("MetaMask nicht gefunden");
-        try {
+    if (!window.ethereum) throw new Error("MetaMask not found");
+    try {
       await window.ethereum.request({
         method: 'wallet_switchEthereumChain',
         params: [{ chainId: CHAIN_ID }]
       });
     } catch (switchError) {
       if (switchError.code === 4902) {
-        alert("Bitte füge das Monbase Alpha Netzwerk zu MetaMask hinzu.");
+        alert("Please add the Monbase Alpha network to MetaMask.");
         return;
       }
     }
@@ -97,7 +97,7 @@ export default function RecipientView({ account, connectMetaMask }) {
       const result = await getInvoicesForReceiver(publicKeyHex);
       setInvoices(result || []);
     } catch (err) {
-      alert("Fehler beim Laden der Rechnungen: " + (err?.message || err));
+      alert("Error loading invoices: " + (err?.message || err));
     }
     setLoading(false);
   };
@@ -112,9 +112,9 @@ export default function RecipientView({ account, connectMetaMask }) {
       setDecrypted(prev => ({ ...prev, [invoiceId]: decrypted }));
     } catch (err) {
       if (err.code === -32603) {
-        alert("Entschlüsselung abgelehnt. Bitte bestätige die Anfrage in MetaMask.");
+        alert("Decryption denied. Please confirm the request in MetaMask.");
       } else {
-        alert("Fehler beim Entschlüsseln: " + (err?.message || err));
+        alert("Error decrypting: " + (err?.message || err));
       }
     }
   };
@@ -192,7 +192,7 @@ export default function RecipientView({ account, connectMetaMask }) {
                             amount = parsed.totalAmountWithVat || parsed.totalAmount || parsed.amount || 0;
                           } catch {}
                           if (!amount || isNaN(amount)) {
-                            alert("Betrag konnte nicht aus der Rechnung gelesen werden.");
+                            alert("Could not read amount from invoice.");
                             return;
                           }
                           const value = window.ethers
@@ -208,9 +208,9 @@ export default function RecipientView({ account, connectMetaMask }) {
                                 : '0x' + BigInt(value).toString(16)
                             }]
                           });
-                          alert("Zahlung gesendet!");
+                          alert("Payment sent!");
                         } catch (err) {
-                          alert("Fehler beim Bezahlen: " + (err?.message || err));
+                          alert("Error while paying: " + (err?.message || err));
                         }
                       }}
                     >

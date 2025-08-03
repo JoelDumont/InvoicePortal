@@ -1,12 +1,15 @@
-# React + Vite
+# eInvoiceUI – Ethereum Invoice dApp
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This project is a decentralized web application (dApp) for securely creating, encrypting, sending, and paying invoices on the Ethereum/Moonbeam blockchain.
 
-Currently, two official plugins are available:
+**Features:**
+- Invoices are encrypted client-side and stored on-chain in a smart contract.
+- Recipients can decrypt their invoices using MetaMask.
+- Invoices can be paid directly via MetaMask.
+- No central storage – everything is handled via smart contract and wallet.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+**Live Testnet:**  
+👉 [https://invoicingportal.netlify.app](https://invoicingportal)
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+**Note:**  
+The app currently runs on an Moonbase (Testnet of Moonbeam). MetaMask is required
