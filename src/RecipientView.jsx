@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import { ethers } from 'ethers'
 
-const CONTRACT_ADDRESS = "0x15ff7d0a3ad73c4785ea266dfd1d1bff11880511";
+const CONTRACT_ADDRESS = import.meta.env.VITE_SMART_CONTRACT_ADDRESS;
+const CHAIN_ID = import.meta.env.VITE_CHAIN_ID;
 const CONTRACT_ABI = [
   {
     "inputs": [
@@ -50,6 +51,17 @@ export default function RecipientView({ account, connectMetaMask }) {
   // Smart Contract Call direkt hier
   async function getInvoicesForReceiver(receiverKeyHex, start = 0, count = 20) {
     if (!window.ethereum) throw new Error("MetaMask nicht gefunden");
+        try {
+      await window.ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: CHAIN_ID }]
+      });
+    } catch (switchError) {
+      if (switchError.code === 4902) {
+        alert("Bitte füge das Monbase Alpha Netzwerk zu MetaMask hinzu.");
+        return;
+      }
+    }
     const provider = new ethers.providers.Web3Provider(window.ethereum);
     const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
     const invoices = await contract.getInvoicesForReceiver(receiverKeyHex, start, count);

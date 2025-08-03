@@ -48,8 +48,8 @@ const CONTRACT_ABI = [
 		"type": "function"
 	}
 ];
-const CONTRACT_ADDRESS = "0x15ff7d0a3ad73c4785ea266dfd1d1bff11880511";
-const MONBASE_ALPHA_CHAIN_ID = "0x507"; // 1287 dezimal 
+const CONTRACT_ADDRESS = import.meta.env.VITE_SMART_CONTRACT_ADDRESS;
+const CHAIN_ID = import.meta.env.VITE_CHAIN_ID;
 
 export default function SenderView({ account, setAccount, connectMetaMask, jsonData, setJsonData }) {
   const [receiverPubKey, setReceiverPubKey] = useState("");
@@ -128,7 +128,7 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
     try {
       await window.ethereum.request({
         method: 'wallet_switchEthereumChain',
-        params: [{ chainId: MONBASE_ALPHA_CHAIN_ID }]
+        params: [{ chainId: CHAIN_ID }]
       });
     } catch (switchError) {
       if (switchError.code === 4902) {
