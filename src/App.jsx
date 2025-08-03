@@ -2,7 +2,7 @@ import { useState } from 'react'
 import './App.css'
 import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom'
 import SenderView from './SenderView.jsx'
-import RecipientView from './RecipientView.jsx'
+import RecipientView from './ReceiverView.jsx'
 
 function InvoicePortal() {
   const navigate = useNavigate();
@@ -42,7 +42,6 @@ function App() {
 
   return (
     <Router>
-      {/* MetaMask Button oben rechts */}
       <div style={{
         position: 'absolute',
         top: 0,

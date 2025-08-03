@@ -38,7 +38,6 @@ export default function RecipientView({ account, connectMetaMask }) {
   const [loading, setLoading] = useState(false);
   const [loadingPubKey, setLoadingPubKey] = useState(false);
 
-  // Hilfsfunktion: base64 → bytes32 hex
   function base64ToBytes32Hex(base64) {
     const raw = atob(base64);
     let hex = '0x';
@@ -48,7 +47,6 @@ export default function RecipientView({ account, connectMetaMask }) {
     return hex;
   }
 
-  // Smart Contract Call direkt hier
   async function getInvoicesForReceiver(receiverKeyHex, start = 0, count = 20) {
     if (!window.ethereum) throw new Error("MetaMask nicht gefunden");
         try {
@@ -76,7 +74,6 @@ export default function RecipientView({ account, connectMetaMask }) {
     }));
   }
 
-  // Lade MetaMask encryption public key nur auf Button-Klick
   const handleShowPublicKey = async () => {
     if (!window.ethereum || !account) return;
     setLoadingPubKey(true);
@@ -92,7 +89,6 @@ export default function RecipientView({ account, connectMetaMask }) {
     setLoadingPubKey(false);
   };
 
-  // Load invoices for this public key
   const handleLoadInvoices = async () => {
     if (!publicKey) return;
     setLoading(true);
@@ -106,7 +102,6 @@ export default function RecipientView({ account, connectMetaMask }) {
     setLoading(false);
   };
 
-  // Decrypt invoice data
   const handleDecrypt = async (encryptedData, invoiceId) => {
     try {
       let encryptedString = encryptedData;
@@ -126,13 +121,13 @@ export default function RecipientView({ account, connectMetaMask }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: '100px' }}>
-      <h1>Recipient</h1>
+      <h1>Receiver</h1>
       {account && (
         <div style={{ marginTop: 30, textAlign: 'center' }}>
-          <h3>Dein Public Key</h3>
+          <h3>Your Public Key</h3>
           {!publicKey ? (
             <button onClick={handleShowPublicKey} style={{ marginTop: 10, padding: '8px 18px', fontSize: 16 }}>
-              {loadingPubKey ? "Lade..." : "Show Public Key"}
+              {loadingPubKey ? "Loading..." : "Show Public Key"}
             </button>
           ) : (
             <>
@@ -141,7 +136,7 @@ export default function RecipientView({ account, connectMetaMask }) {
                 {publicKey}
               </div>
               <button onClick={handleLoadInvoices} style={{ marginTop: 20, padding: '8px 18px', fontSize: 16 }}>
-                {loading ? "Lade..." : "Rechnungen laden"}
+                {loading ? "Loading..." : "Load Invoices"}
               </button>
             </>
           )}
@@ -149,14 +144,14 @@ export default function RecipientView({ account, connectMetaMask }) {
       )}
       {invoices.length > 0 && (
         <div style={{ marginTop: 40, width: 500 }}>
-          <h3>Empfangene Rechnungen</h3>
+          <h3>Received Invoices</h3>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
             <thead>
               <tr>
-                <th style={{ borderBottom: '1px solid #ccc' }}>Rechnungs-ID</th>
+                <th style={{ borderBottom: '1px solid #ccc' }}>Invoice ID</th>
                 <th style={{ borderBottom: '1px solid #ccc' }}>Sender</th>
-                <th style={{ borderBottom: '1px solid #ccc' }}>Verifizieren</th>
-                <th style={{ borderBottom: '1px solid #ccc' }}>Bezahlen</th>
+                <th style={{ borderBottom: '1px solid #ccc' }}>Verify</th>
+                <th style={{ borderBottom: '1px solid #ccc' }}>Pay</th>
               </tr>
             </thead>
             <tbody>
@@ -174,14 +169,13 @@ export default function RecipientView({ account, connectMetaMask }) {
                   </td>
                   <td style={{ borderBottom: '1px solid #eee' }}>
                     <button onClick={() => handleDecrypt(inv.encryptedData, inv.id)}>
-                      Entschlüsseln
+                      View Invoice
                     </button>
                   </td>
                   <td style={{ borderBottom: '1px solid #eee', wordBreak: 'break-all', maxWidth: 180 }}>
                     <button
                       onClick={async () => {
                         try {
-                          // Entschlüssle Invoice, falls noch nicht geschehen
                           let decryptedData = decrypted[inv.id];
                           if (!decryptedData) {
                             let encryptedString = inv.encryptedData;
@@ -192,7 +186,6 @@ export default function RecipientView({ account, connectMetaMask }) {
                             decryptedData = result;
                             setDecrypted(prev => ({ ...prev, [inv.id]: decryptedData }));
                           }
-                          // Versuche totalAmount zu extrahieren
                           let amount = 0;
                           try {
                             const parsed = JSON.parse(decryptedData);
@@ -202,10 +195,9 @@ export default function RecipientView({ account, connectMetaMask }) {
                             alert("Betrag konnte nicht aus der Rechnung gelesen werden.");
                             return;
                           }
-                          // Sende Zahlung an den Sender
                           const value = window.ethers
                             ? window.ethers.utils.parseEther(amount.toString())
-                            : (amount * 1e18).toString(); // fallback
+                            : (amount * 1e18).toString(); 
                           await window.ethereum.request({
                             method: 'eth_sendTransaction',
                             params: [{
@@ -222,7 +214,7 @@ export default function RecipientView({ account, connectMetaMask }) {
                         }
                       }}
                     >
-                      Bezahlen
+                      Pay
                     </button>
                   </td>
                 </tr>
