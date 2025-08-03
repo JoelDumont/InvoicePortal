@@ -1,5 +1,5 @@
 window.global = window;
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ethers } from 'ethers'
 import { encrypt } from '@metamask/eth-sig-util';
 import { bufferToHex } from 'ethereumjs-util';
@@ -12,7 +12,6 @@ function generateId() {
     .map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// Verschlüsselt JSON mit ECIES und Empfänger-PublicKey
 async function encryptJSON(jsonString, receiverPubKey) {
   return bufferToHex(
     Buffer.from(
@@ -41,11 +40,6 @@ const CONTRACT_ABI = [
 				"internalType": "bytes",
 				"name": "encryptedData",
 				"type": "bytes"
-			},
-			{
-				"internalType": "uint256",
-				"name": "totalAmount",
-				"type": "uint256"
 			}
 		],
 		"name": "createInvoice",
@@ -54,37 +48,69 @@ const CONTRACT_ABI = [
 		"type": "function"
 	}
 ];
-const CONTRACT_ADDRESS = "0x63709c92908aa1922780d55a07d2dc807ca5fc14";
+const CONTRACT_ADDRESS = "0x15ff7d0a3ad73c4785ea266dfd1d1bff11880511";
 const MONBASE_ALPHA_CHAIN_ID = "0x507"; // 1287 dezimal 
 
 export default function SenderView({ account, setAccount, connectMetaMask, jsonData, setJsonData }) {
   const [receiverPubKey, setReceiverPubKey] = useState("");
-  const [totalAmount, setTotalAmount] = useState("");
+  const [titel, setTitel] = useState("");
+  const [vat, setVat] = useState("8.1"); // Mwst. → VAT
   const [jsonInput, setJsonInput] = useState("");
-  const [jsonValid, setJsonValid] = useState(false);
   const [errors, setErrors] = useState({});
   const [invoice, setInvoice] = useState(null);
 
-  // Validate JSON syntax live
-  const handleJsonInputChange = (e) => {
-    const value = e.target.value;
-    setJsonInput(value);
-    try {
-      const parsed = JSON.parse(value);
-      setJsonData(parsed);
-      setJsonValid(true);
-    } catch {
-      setJsonValid(false);
-      setJsonData(null);
-    }
+  // Line items state
+  const [lineItems, setLineItems] = useState([]);
+
+  // Add a new line item
+  const addLineItem = () => {
+    setLineItems(items => [
+      ...items,
+      { index: items.length, text: '', preis: '' }
+    ]);
   };
+
+  // Remove a line item
+  const removeLineItem = (idx) => {
+    setLineItems(items =>
+      items.filter((item, i) => i !== idx).map((item, i) => ({ ...item, index: i }))
+    );
+  };
+
+  // Update a line item
+  const updateLineItem = (idx, field, value) => {
+    setLineItems(items =>
+      items.map((item, i) =>
+        i === idx ? { ...item, [field]: value } : item
+      )
+    );
+  };
+
+  // Calculate totalAmount
+  const totalAmount = lineItems.reduce((sum, item) => {
+    const preis = parseFloat(item.preis);
+    return sum + (isNaN(preis) ? 0 : preis);
+  }, 0);
+
+  // Calculate totalAmount with VAT
+  const totalAmountWithVat = +(totalAmount * (1 + parseFloat(vat.replace(',', '.')) / 100)).toFixed(2);
+
+  // Update jsonInput in real time based on lineItems, totalAmount, titel, vat
+  useEffect(() => {
+    const jsonObj = {
+      titel,
+      vat: parseFloat(vat),
+      lineItems,
+      totalAmount,
+      totalAmountWithVat
+    };
+    const jsonStr = JSON.stringify(jsonObj, null, 2);
+    setJsonInput(jsonStr);
+    setJsonData(jsonObj);
+  }, [lineItems, titel, vat]);
 
   // Validate uncompressed public key (starts with 0x04, 130 hex chars)
   const validatePublicKey = (pubKey) => /^0x04[a-fA-F0-9]{128}$/.test(pubKey);
-
-  const validateAmount = (value) => {
-    return /^\d+(\.\d{1,18})?$/.test(value) && parseFloat(value) >= 0;
-  };
 
   // Save invoices to localStorage
   const saveInvoiceToLocalStorage = (newInvoice) => {
@@ -94,7 +120,7 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
   };
 
   // Smart Contract Call
-  const callCreateInvoice = async (receiver, encryptedData, totalAmount) => {
+  const callCreateInvoice = async (receiverKeyBytes32, encryptedData) => {
     if (!window.ethereum) {
       alert("MetaMask ist nicht installiert.");
       return;
@@ -115,25 +141,13 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
     const signer = await provider.getSigner();
     const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
 
-    // totalAmount als wei (falls ETH als Dezimal eingegeben)
-    const totalAmountWei = ethers.utils.parseEther(totalAmount);
-
-    // Transaktion senden
-    await contract.createInvoice(receiver, encryptedData, totalAmountWei);
+    // Transaktion senden (angepasst an ABI: receiverKey (bytes32), encryptedData (bytes))
+    await contract.createInvoice(receiverKeyBytes32, encryptedData);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     const newErrors = {};
-    // if (!validatePublicKey(receiverPubKey)) {
-    //   newErrors.receiverPubKey = "Ungültiger Public Key (muss mit 0x04 beginnen und 130 Hex-Zeichen lang sein).";
-    // }
-    if (!validateAmount(totalAmount)) {
-      newErrors.totalAmount = "Ungültiger ETH-Betrag.";
-    }
-    if (!jsonValid) {
-      newErrors.jsonData = "Ungültige JSON-Syntax.";
-    }
     setErrors(newErrors);
     if (Object.keys(newErrors).length === 0) {
       try {
@@ -141,7 +155,7 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
 
         const receiverKeyInBytes = base64ToBytes32Hex(receiverPubKey); 
 
-        await callCreateInvoice(receiverKeyInBytes, encryptedDataBuffer, totalAmount);
+        await callCreateInvoice(receiverKeyInBytes, encryptedDataBuffer);
         alert("Invoice erstellt, verschlüsselt und an den Smart Contract gesendet!");
       } catch (err) {
         alert("Fehler beim Erstellen oder Senden: " + (err?.message || err));
@@ -161,7 +175,7 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: '100px' }}>
       <h1>Sender View</h1>
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '15px', width: '300px' }}>
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '15px', width: '350px' }}>
         <div style={{ width: '100%' }}>
           <label>Empfänger Public Key:</label><br />
           <input
@@ -173,24 +187,73 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
           />
           {errors.receiverPubKey && <span style={{ color: 'red' }}>{errors.receiverPubKey}</span>}
         </div>
-        <div style={{ width: '100%' }}>
-          <label>Betrag (ETH):</label><br />
-          <input type="text" value={totalAmount} onChange={e => setTotalAmount(e.target.value)} style={{ width: '100%' }} />
-          {errors.totalAmount && <span style={{ color: 'red' }}>{errors.totalAmount}</span>}
+        <div style={{ width: '100%', marginTop: 12 }}>
+          <label>Titel:</label><br />
+          <input
+            type="text"
+            value={titel}
+            onChange={e => setTitel(e.target.value)}
+            style={{ width: '100%' }}
+            placeholder="Titel der Rechnung"
+          />
         </div>
-        <div style={{ width: '100%' }}>
-          <label style={{ fontSize: '16px', marginRight: '10px' }}>JSON Daten:</label>
+        <div style={{ width: '100%', marginTop: 12 }}>
+          <label>VAT:</label><br />
+          <select
+            value={vat}
+            onChange={e => setVat(e.target.value)}
+            style={{ width: '100%' }}
+          >
+            <option value="8.1">8,1%</option>
+            <option value="2.6">2,6%</option>
+            <option value="3.8">3,8%</option>
+          </select>
+        </div>
+        <div style={{ width: '100%', marginTop: 20 }}>
+          <label style={{ fontWeight: 'bold' }}>Line Items:</label>
+          {lineItems.length === 0 && <br />}
+          {lineItems.map((item, idx) => (
+            <div key={idx} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+              <span style={{ width: 24 }}>{item.index + 1}.</span>
+              <input
+                type="text"
+                placeholder="Beschreibung"
+                value={item.text}
+                onChange={e => updateLineItem(idx, 'text', e.target.value)}
+                style={{ flex: 2 }}
+              />
+              <input
+                type="number"
+                placeholder="Preis"
+                value={item.preis}
+                onChange={e => updateLineItem(idx, 'preis', e.target.value)}
+                style={{ width: 80 }}
+              />
+              <button type="button" onClick={() => removeLineItem(idx)} style={{ color: 'red' }}>✕</button>
+            </div>
+          ))}
+          <button type="button" onClick={addLineItem} style={{ marginTop: 6 }}>+ Line Item</button>
+        </div>
+        <div style={{ width: '100%', marginTop: 20 }}>
+          <label style={{ fontSize: '16px', marginRight: '10px' }}>JSON (Preview):</label>
           <textarea
             value={jsonInput}
-            onChange={handleJsonInputChange}
-            rows={6}
-            style={{ width: '100%', fontFamily: 'monospace', fontSize: '14px' }}
-            placeholder='{"key":"value"}'
+            readOnly
+            rows={8}
+            style={{
+              width: '100%',
+              fontFamily: 'monospace',
+              fontSize: '14px',
+              background: '#585858ff',
+              color: '#fff',
+              border: '1px solid #bbb',
+              borderRadius: 4,
+              padding: 8
+            }}
           />
-          {jsonValid ? <span style={{ color: 'green' }}>Gültige JSON-Syntax</span> : <span style={{ color: 'red' }}>Ungültige JSON-Syntax</span>}
           {errors.jsonData && <span style={{ color: 'red' }}>{errors.jsonData}</span>}
         </div>
-        <button type="submit" style={{ padding: '10px 20px', fontSize: '16px' }}>Rechnung erstellen</button>
+        <button type="submit" style={{ padding: '10px 20px', fontSize: '16px', marginTop: 20 }}>Rechnung erstellen</button>
       </form>
       {invoice && (
         <div style={{ marginTop: '30px', textAlign: 'center' }}>

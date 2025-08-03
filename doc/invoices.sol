@@ -6,10 +6,7 @@ contract SecureInvoiceVault {
         bytes32 id;
         address sender;
         bytes32 receiverKey; // X25519 public key for encryption
-        bytes encryptedData; // e.g., AES/ECIES encrypted JSON
-        uint256 totalAmount;
-        uint256 paidAmount;
-        bool paid;
+        bytes encryptedData; // Encrypted data
         uint256 timestamp;
     }
 
@@ -21,12 +18,10 @@ contract SecureInvoiceVault {
     uint256 constant MAX_INVOICES_PER_ADDRESS = 100;
 
     event InvoiceCreated(bytes32 id, address indexed sender, bytes32 indexed receiverKey);
-    event InvoicePaid(bytes32 id, address indexed payer, uint256 amount);
 
     function createInvoice(
         bytes32 receiverKey,
-        bytes calldata encryptedData,
-        uint256 totalAmount
+        bytes calldata encryptedData
     ) external {
         require(receiverKey != bytes32(0), "Receiver key required");
         require(receivedInvoices[receiverKey].length < MAX_INVOICES_PER_ADDRESS, "Receiver invoice limit reached");
@@ -39,9 +34,6 @@ contract SecureInvoiceVault {
             sender: msg.sender,
             receiverKey: receiverKey,
             encryptedData: encryptedData,
-            totalAmount: totalAmount,
-            paidAmount: 0,
-            paid: false,
             timestamp: block.timestamp
         });
 
@@ -49,26 +41,6 @@ contract SecureInvoiceVault {
         receivedInvoices[receiverKey].push(id);
 
         emit InvoiceCreated(id, msg.sender, receiverKey);
-    }
-
-    // Anyone can pay
-    function payInvoice(bytes32 id) external payable {
-        Invoice storage invoice = invoices[id];
-        require(!invoice.paid, "Already paid");
-        require(msg.value > 0, "Payment required");
-
-        uint256 remaining = invoice.totalAmount - invoice.paidAmount;
-        require(msg.value <= remaining, "Overpayment not allowed");
-
-        invoice.paidAmount += msg.value;
-
-        payable(invoice.sender).transfer(msg.value);
-
-        if (invoice.paidAmount >= invoice.totalAmount) {
-            invoice.paid = true;
-        }
-
-        emit InvoicePaid(id, msg.sender, msg.value);
     }
 
     function getSentInvoices() external view returns (bytes32[] memory) {
