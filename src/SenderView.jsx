@@ -12,13 +12,6 @@ function generateId() {
     .map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-
-function publicKeyToAddress(pubKey) {
-  // Decode X25519 public key (base64 → bytes)
-  const x25519Key = Buffer.from(pubKey, 'base64');  
- return ethers.utils.computeAddress(x25519Key);
-}
-
 // Verschlüsselt JSON mit ECIES und Empfänger-PublicKey
 async function encryptJSON(jsonString, receiverPubKey) {
   return bufferToHex(
@@ -37,19 +30,31 @@ async function encryptJSON(jsonString, receiverPubKey) {
 
 // Smart Contract ABI und Adresse
 const CONTRACT_ABI = [
-  {
-    "inputs": [
-      { "internalType": "address", "name": "receiver", "type": "address" },
-      { "internalType": "bytes", "name": "encryptedData", "type": "bytes" },
-      { "internalType": "uint256", "name": "totalAmount", "type": "uint256" }
-    ],
-    "name": "createInvoice",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  }
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "receiverKey",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "bytes",
+				"name": "encryptedData",
+				"type": "bytes"
+			},
+			{
+				"internalType": "uint256",
+				"name": "totalAmount",
+				"type": "uint256"
+			}
+		],
+		"name": "createInvoice",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	}
 ];
-const CONTRACT_ADDRESS = "0x90302bfe858b79865c19eaef6ed824e6574b18d5";
+const CONTRACT_ADDRESS = "0x63709c92908aa1922780d55a07d2dc807ca5fc14";
 const MONBASE_ALPHA_CHAIN_ID = "0x507"; // 1287 dezimal 
 
 export default function SenderView({ account, setAccount, connectMetaMask, jsonData, setJsonData }) {
@@ -132,19 +137,26 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
     setErrors(newErrors);
     if (Object.keys(newErrors).length === 0) {
       try {
-        // 1. Verschlüsseln
         const encryptedDataBuffer = await encryptJSON(jsonInput, receiverPubKey);
-        // 2. Empfänger-Adresse aus Public Key berechnen
-        const receiverAddress = publicKeyToAddress(receiverPubKey);
 
-        // 4. Smart Contract Call
-        await callCreateInvoice(receiverAddress, encryptedDataBuffer, totalAmount);
+        const receiverKeyInBytes = base64ToBytes32Hex(receiverPubKey); 
+
+        await callCreateInvoice(receiverKeyInBytes, encryptedDataBuffer, totalAmount);
         alert("Invoice erstellt, verschlüsselt und an den Smart Contract gesendet!");
       } catch (err) {
         alert("Fehler beim Erstellen oder Senden: " + (err?.message || err));
       }
     }
   };
+
+  function base64ToBytes32Hex(base64) {
+    const raw = atob(base64); // decode base64 to binary string
+    let hex = '0x';
+    for (let i = 0; i < raw.length; i++) {
+      hex += raw.charCodeAt(i).toString(16).padStart(2, '0');
+    }
+    return hex;
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: '100px' }}>

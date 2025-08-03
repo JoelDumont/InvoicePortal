@@ -5,99 +5,55 @@ contract SecureInvoiceVault {
     struct Invoice {
         bytes32 id;
         address sender;
-        address receiver;
+        bytes32 receiverKey; // X25519 public key for encryption
         bytes encryptedData; // e.g., AES/ECIES encrypted JSON
-        uint256 totalAmount; 
+        uint256 totalAmount;
         uint256 paidAmount;
         bool paid;
-        bool accepted; 
         uint256 timestamp;
     }
 
-    mapping(bytes32 => Invoice) private invoices; 
+    mapping(bytes32 => Invoice) private invoices;
     mapping(address => bytes32[]) private sentInvoices;
-    mapping(address => bytes32[]) private receivedInvoices;
+    mapping(bytes32 => bytes32[]) private receivedInvoices; // Keyed by receiverKey
 
-    // Limit to prevent spam/DoS 
+    // Limit to prevent spam/DoS
     uint256 constant MAX_INVOICES_PER_ADDRESS = 100;
 
-    event InvoiceCreated(bytes32 id, address indexed sender, address indexed receiver);
-    event InvoiceAccepted(bytes32 id, address indexed receiver);
-    event InvoiceRejected(bytes32 id, address indexed receiver);
+    event InvoiceCreated(bytes32 id, address indexed sender, bytes32 indexed receiverKey);
     event InvoicePaid(bytes32 id, address indexed payer, uint256 amount);
 
-    modifier onlySenderOrReceiver(bytes32 id) {
-        Invoice storage invoice = invoices[id];
-        require(msg.sender == invoice.sender || msg.sender == invoice.receiver, "Access denied");
-        _;
-    }
-
-    modifier onlyReceiver(bytes32 id) {
-        Invoice storage invoice = invoices[id];
-        require(msg.sender == invoice.receiver, "Not receiver");
-        _;
-    }
-
-    function createInvoice(address receiver, bytes calldata encryptedData, uint256 totalAmount) external {
-        require(receiver != address(0), "Receiver required");
-        require(receivedInvoices[receiver].length < MAX_INVOICES_PER_ADDRESS, "Receiver invoice limit reached");
+    function createInvoice(
+        bytes32 receiverKey,
+        bytes calldata encryptedData,
+        uint256 totalAmount
+    ) external {
+        require(receiverKey != bytes32(0), "Receiver key required");
+        require(receivedInvoices[receiverKey].length < MAX_INVOICES_PER_ADDRESS, "Receiver invoice limit reached");
         require(sentInvoices[msg.sender].length < MAX_INVOICES_PER_ADDRESS, "Sender invoice limit reached");
 
-        bytes32 id = keccak256(abi.encode(msg.sender, receiver, block.timestamp, encryptedData));
+        bytes32 id = keccak256(abi.encode(msg.sender, receiverKey, block.timestamp, encryptedData));
 
         invoices[id] = Invoice({
             id: id,
             sender: msg.sender,
-            receiver: receiver,
+            receiverKey: receiverKey,
             encryptedData: encryptedData,
             totalAmount: totalAmount,
             paidAmount: 0,
             paid: false,
-            accepted: false, 
             timestamp: block.timestamp
         });
 
         sentInvoices[msg.sender].push(id);
-        receivedInvoices[receiver].push(id);
+        receivedInvoices[receiverKey].push(id);
 
-        emit InvoiceCreated(id, msg.sender, receiver);
+        emit InvoiceCreated(id, msg.sender, receiverKey);
     }
 
-    // Receiver must accept the invoice before paying
-    function acceptInvoice(bytes32 id) external onlyReceiver(id) {
+    // Anyone can pay
+    function payInvoice(bytes32 id) external payable {
         Invoice storage invoice = invoices[id];
-        require(!invoice.accepted, "Already accepted");
-        require(!invoice.paid, "Already paid");
-
-        invoice.accepted = true;
-        emit InvoiceAccepted(id, msg.sender);
-    }
-
-    // Receiver can reject unwanted invoices to remove from list and prevent spam
-    function rejectInvoice(bytes32 id) external onlyReceiver(id) {
-        Invoice storage invoice = invoices[id];
-        require(!invoice.accepted, "Cannot reject accepted invoice");
-        require(!invoice.paid, "Cannot reject paid invoice");
-
-        // Remove from receivedInvoices
-        bytes32[] storage recvList = receivedInvoices[msg.sender];
-        for (uint256 i = 0; i < recvList.length; i++) {
-            if (recvList[i] == id) {
-                recvList[i] = recvList[recvList.length - 1];
-                recvList.pop();
-                break;
-            }
-        }
-
-        // Delete the invoice struct to save storage (refund gas)
-        delete invoices[id];
-
-        emit InvoiceRejected(id, msg.sender);
-    }
-
-    function payInvoice(bytes32 id) external payable onlyReceiver(id) {
-        Invoice storage invoice = invoices[id];
-        require(invoice.accepted, "Invoice not accepted");
         require(!invoice.paid, "Already paid");
         require(msg.value > 0, "Payment required");
 
@@ -119,8 +75,9 @@ contract SecureInvoiceVault {
         return sentInvoices[msg.sender];
     }
 
-    function getReceivedInvoices() external view returns (bytes32[] memory) {
-        return receivedInvoices[msg.sender];
+    // Public: Anyone can query invoices for a key (lists are public, data encrypted)
+    function getReceivedInvoices(bytes32 receiverKey) external view returns (bytes32[] memory) {
+        return receivedInvoices[receiverKey];
     }
 
     function getInvoicesForSender(uint256 start, uint256 count) external view returns (Invoice[] memory) {
@@ -138,8 +95,9 @@ contract SecureInvoiceVault {
         return result;
     }
 
-    function getInvoicesForReceiver(uint256 start, uint256 count) external view returns (Invoice[] memory) {
-        bytes32[] memory recvIds = receivedInvoices[msg.sender];
+    // Public: Anyone can query invoices for a key
+    function getInvoicesForReceiver(bytes32 receiverKey, uint256 start, uint256 count) external view returns (Invoice[] memory) {
+        bytes32[] memory recvIds = receivedInvoices[receiverKey];
         uint256 length = recvIds.length;
         if (start >= length) return new Invoice[](0);
 
@@ -153,7 +111,8 @@ contract SecureInvoiceVault {
         return result;
     }
 
-    function getInvoice(bytes32 id) external view onlySenderOrReceiver(id) returns (Invoice memory) {
+    // Public: Anyone can view (data encrypted)
+    function getInvoice(bytes32 id) external view returns (Invoice memory) {
         return invoices[id];
     }
 }
