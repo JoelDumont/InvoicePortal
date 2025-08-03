@@ -1,6 +1,6 @@
 # Invoicing Portal – dApp
 
-![Invoicing Portal Logo](public/invoicingPortal.png)
+<img src="public/invoicingPortal.png" alt="Invoicing Portal Logo" width="220" />
 
 This project is a decentralized web application (dApp) for securely creating, encrypting, sending, and paying invoices on the Ethereum/Moonbeam blockchain.
 
