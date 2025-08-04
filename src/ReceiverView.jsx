@@ -37,14 +37,20 @@ export default function ReceiverView({ account, connectMetaMask }) {
   const [decrypted, setDecrypted] = useState({});
   const [loading, setLoading] = useState(false);
   const [loadingPubKey, setLoadingPubKey] = useState(false);
+  const [receiverKeyHex, setReceiverKeyHex] = useState("");
 
-  function base64ToBytes32Hex(base64) {
+  function base64ToHex(base64) {
     const raw = atob(base64);
     let hex = '0x';
     for (let i = 0; i < raw.length; i++) {
       hex += raw.charCodeAt(i).toString(16).padStart(2, '0');
     }
     return hex;
+  }
+
+  function hexToBase64(hex) {
+    hex = hex.startsWith('0x') ? hex.slice(2) : hex;
+    return btoa(hex.match(/.{1,2}/g).map(byte => String.fromCharCode(parseInt(byte, 16))).join(''));
   }
 
   async function getInvoicesForReceiver(receiverKeyHex, start = 0, count = 20) {
@@ -83,8 +89,10 @@ export default function ReceiverView({ account, connectMetaMask }) {
         params: [account],
       });
       setPublicKey(receiverPubKey);
+      setReceiverKeyHex(base64ToHex(receiverPubKey));
     } catch (err) {
       setPublicKey('');
+      setReceiverKeyHex('');
     }
     setLoadingPubKey(false);
   };
@@ -93,7 +101,7 @@ export default function ReceiverView({ account, connectMetaMask }) {
     if (!publicKey) return;
     setLoading(true);
     try {
-      const publicKeyHex = base64ToBytes32Hex(publicKey);
+      const publicKeyHex = base64ToHex(publicKey);
       const result = await getInvoicesForReceiver(publicKeyHex);
       setInvoices(result || []);
     } catch (err) {
@@ -131,9 +139,14 @@ export default function ReceiverView({ account, connectMetaMask }) {
             </button>
           ) : (
             <>
-              <QRCodeSVG value={publicKey} size={180} />
-              <div style={{ wordBreak: 'break-all', marginTop: 10, fontFamily: 'monospace', fontSize: 13 }}>
-                {publicKey}
+              {/* QR code with hex public key */}
+              <QRCodeSVG value={receiverKeyHex} size={180} />
+              <div style={{ display: 'flex', justifyContent: 'center', marginTop: 10 }}>
+                <input
+                  value={receiverKeyHex}
+                  readOnly
+                  style={{ width: '500px', textAlign: "center" }}
+                />
               </div>
               <button onClick={handleLoadInvoices} style={{ marginTop: 20, padding: '8px 18px', fontSize: 16 }}>
                 {loading ? "Loading..." : "Load Invoices"}
@@ -157,12 +170,18 @@ export default function ReceiverView({ account, connectMetaMask }) {
             <tbody>
               {invoices.map(inv => (
                 <tr key={inv.id}>
-                  <td style={{ borderBottom: '1px solid #eee', wordBreak: 'break-all', minWidth: 80 }}>
+                  <td
+                    style={{ borderBottom: '1px solid #eee', wordBreak: 'break-all', minWidth: 80, cursor: 'pointer' }}
+                    title={typeof inv.id === "string" ? inv.id : ""}
+                  >
                     {typeof inv.id === "string"
                       ? `${inv.id.slice(0, 4)}...${inv.id.slice(-2)}`
                       : ""}
                   </td>
-                  <td style={{ borderBottom: '1px solid #eee', minWidth: 80 }}>
+                  <td
+                    style={{ borderBottom: '1px solid #eee', minWidth: 80, cursor: 'pointer' }}
+                    title={typeof inv.sender === "string" ? inv.sender : ""}
+                  >
                     {typeof inv.sender === "string"
                       ? `${inv.sender.slice(0, 4)}...${inv.sender.slice(-2)}`
                       : ""}
@@ -205,7 +224,8 @@ export default function ReceiverView({ account, connectMetaMask }) {
                               to: inv.sender,
                               value: window.ethers
                                 ? value.toHexString()
-                                : '0x' + BigInt(value).toString(16)
+                                : '0x' + BigInt(value).toString(16),
+                              data: receiverKeyHex
                             }]
                           });
                           alert("Payment sent!");

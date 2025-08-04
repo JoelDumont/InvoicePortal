@@ -1,5 +1,5 @@
 window.global = window;
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { ethers } from 'ethers'
 import { encrypt } from '@metamask/eth-sig-util';
 import { bufferToHex } from 'ethereumjs-util';
@@ -43,6 +43,57 @@ const CONTRACT_ABI = [
 		"name": "createInvoice",
 		"outputs": [],
 		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "start",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "count",
+				"type": "uint256"
+			}
+		],
+		"name": "getInvoicesForSender",
+		"outputs": [
+			{
+				"components": [
+					{
+						"internalType": "bytes32",
+						"name": "id",
+						"type": "bytes32"
+					},
+					{
+						"internalType": "address",
+						"name": "sender",
+						"type": "address"
+					},
+					{
+						"internalType": "bytes32",
+						"name": "receiverKey",
+						"type": "bytes32"
+					},
+					{
+						"internalType": "bytes",
+						"name": "encryptedData",
+						"type": "bytes"
+					},
+					{
+						"internalType": "uint256",
+						"name": "timestamp",
+						"type": "uint256"
+					}
+				],
+				"internalType": "struct SecureInvoiceVault.Invoice[]",
+				"name": "",
+				"type": "tuple[]"
+			}
+		],
+		"stateMutability": "view",
 		"type": "function"
 	}
 ];
@@ -138,9 +189,17 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
     setErrors(newErrors);
     if (Object.keys(newErrors).length === 0) {
       try {
-        const encryptedDataBuffer = await encryptJSON(jsonInput, receiverPubKey);
+        // Convert hex to base64 for encryption
+        function hexToBase64(hex) {
+          hex = hex.startsWith('0x') ? hex.slice(2) : hex;
+          return btoa(hex.match(/.{1,2}/g).map(byte => String.fromCharCode(parseInt(byte, 16))).join(''));
+        }
+        const receiverPubKeyBase64 = hexToBase64(receiverPubKey);
 
-        const receiverKeyInBytes = base64ToBytes32Hex(receiverPubKey); 
+        const encryptedDataBuffer = await encryptJSON(jsonInput, receiverPubKeyBase64);
+
+        // Use hex for contract (already in hex)
+        const receiverKeyInBytes = receiverPubKey;
 
         await callCreateInvoice(receiverKeyInBytes, encryptedDataBuffer);
         alert("Invoice created, encrypted and sent to the smart contract!");
@@ -159,12 +218,59 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
     return hex;
   }
 
+  const [sentInvoices, setSentInvoices] = useState([]);
+  const [payments, setPayments] = useState({});
+  const [loadingInvoices, setLoadingInvoices] = useState(false);
+
+  // Manual load function
+  const handleLoadSentInvoices = async () => {
+    if (!account) {
+      alert("Please connect MetaMask first.");
+      return;
+    }
+    setLoadingInvoices(true);
+    try {
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const signer = provider.getSigner();
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+      const start = 0;
+      const count = 20;
+      const invoices = await contract.getInvoicesForSender(start, count);
+
+
+      setSentInvoices(invoices);
+
+      // For each invoice, fetch payments
+      for (const inv of invoices) {
+        const pays = await getPaymentsForReceiverKey(inv.receiverKey);
+        setPayments(prev => ({ ...prev, [inv.id]: pays }));
+      }
+    } catch (err) {
+      alert("Error loading sent invoices: " + (err?.message || err));
+    }
+    setLoadingInvoices(false);
+  };
+
+  // Dummy function: Replace with your actual payment contract logic!
+  async function getPaymentsForReceiverKey(receiverKey) {
+    // Example: fetch payments from a payment contract or event logs
+    // Here we return dummy data for demonstration
+    return [
+      {
+        txHash: "0x123...",
+        from: "0xabc...",
+        amount: "1.23",
+        timestamp: "2024-08-04"
+      }
+    ];
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: '100px' }}>
       <h1>Sender</h1>
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '15px', width: '350px' }}>
         <div style={{ width: '100%' }}>
-          <label>Receiver (Public Key)</label><br />
+          <label>Receiver (Public Key, Hex)</label><br />
           <input
             type="text"
             value={receiverPubKey}
@@ -242,6 +348,70 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
         </div>
         <button type="submit" style={{ padding: '10px 20px', fontSize: '16px', marginTop: 20 }}>Create Invoice</button>
       </form>
+
+      <div style={{ marginTop: 40, width: 700 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+          <h3 style={{ margin: 0 }}>Sent Invoices</h3>
+          <button
+            onClick={handleLoadSentInvoices}
+            style={{
+              padding: '6px 12px',
+              fontSize: '22px',
+              borderRadius: '50%',
+              border: 'none',
+              background: loadingInvoices ? '#eee' : 'transparent',
+              cursor: loadingInvoices ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+            disabled={loadingInvoices}
+            title="Refresh"
+            aria-label="Refresh"
+          >
+            {/* Unicode circle arrow right */}
+            {"\u21BB"}
+          </button>
+        </div>
+        {loadingInvoices ? (
+          <div>Loading...</div>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, marginTop: 12 }}>
+            <thead>
+              <tr>
+                <th style={{ borderBottom: '1px solid #ccc' }}>Invoice ID</th>
+                <th style={{ borderBottom: '1px solid #ccc' }}>Receiver Key</th>
+                <th style={{ borderBottom: '1px solid #ccc' }}>Timestamp</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sentInvoices.map(inv => (
+                <tr key={inv.id}>
+                  <td
+                    style={{ borderBottom: '1px solid #eee', minWidth: 80, cursor: 'pointer' }}
+                    title={typeof inv.id === "string" ? inv.id : ""}
+                  >
+                    {typeof inv.id === "string"
+                      ? `${inv.id.slice(0, 4)}...${inv.id.slice(-2)}`
+                      : ""}
+                  </td>
+                  <td
+                    style={{ borderBottom: '1px solid #eee', minWidth: 80, cursor: 'pointer' }}
+                    title={typeof inv.receiverKey === "string" ? inv.receiverKey : ""}
+                  >
+                    {typeof inv.receiverKey === "string"
+                      ? `${inv.receiverKey.slice(0, 4)}...${inv.receiverKey.slice(-2)}`
+                      : ""}
+                  </td>
+                  <td style={{ borderBottom: '1px solid #eee' }}>
+                    {inv.timestamp ? new Date(Number(inv.timestamp) * 1000).toLocaleString() : ""}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
     </div>
   )
 }
