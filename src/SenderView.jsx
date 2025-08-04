@@ -151,13 +151,6 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
     setJsonData(jsonObj);
   }, [lineItems, titel, vat]);
 
-  const validatePublicKey = (pubKey) => /^0x04[a-fA-F0-9]{128}$/.test(pubKey);
-
-  const saveInvoiceToLocalStorage = (newInvoice) => {
-    const invoices = JSON.parse(localStorage.getItem('invoices') || '[]');
-    invoices.push(newInvoice);
-    localStorage.setItem('invoices', JSON.stringify(invoices));
-  };
 
   const callCreateInvoice = async (receiverKeyBytes32, encryptedData) => {
     if (!window.ethereum) {
@@ -189,7 +182,6 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
     setErrors(newErrors);
     if (Object.keys(newErrors).length === 0) {
       try {
-        // Convert hex to base64 for encryption
         function hexToBase64(hex) {
           hex = hex.startsWith('0x') ? hex.slice(2) : hex;
           return btoa(hex.match(/.{1,2}/g).map(byte => String.fromCharCode(parseInt(byte, 16))).join(''));
@@ -198,7 +190,6 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
 
         const encryptedDataBuffer = await encryptJSON(jsonInput, receiverPubKeyBase64);
 
-        // Use hex for contract (already in hex)
         const receiverKeyInBytes = receiverPubKey;
 
         await callCreateInvoice(receiverKeyInBytes, encryptedDataBuffer);
@@ -219,10 +210,8 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
   }
 
   const [sentInvoices, setSentInvoices] = useState([]);
-  const [payments, setPayments] = useState({});
   const [loadingInvoices, setLoadingInvoices] = useState(false);
 
-  // Manual load function
   const handleLoadSentInvoices = async () => {
     if (!account) {
       alert("Please connect MetaMask first.");
@@ -240,30 +229,11 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
 
       setSentInvoices(invoices);
 
-      // For each invoice, fetch payments
-      for (const inv of invoices) {
-        const pays = await getPaymentsForReceiverKey(inv.receiverKey);
-        setPayments(prev => ({ ...prev, [inv.id]: pays }));
-      }
     } catch (err) {
       alert("Error loading sent invoices: " + (err?.message || err));
     }
     setLoadingInvoices(false);
   };
-
-  // Dummy function: Replace with your actual payment contract logic!
-  async function getPaymentsForReceiverKey(receiverKey) {
-    // Example: fetch payments from a payment contract or event logs
-    // Here we return dummy data for demonstration
-    return [
-      {
-        txHash: "0x123...",
-        from: "0xabc...",
-        amount: "1.23",
-        timestamp: "2024-08-04"
-      }
-    ];
-  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: '100px' }}>
@@ -276,7 +246,7 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
             value={receiverPubKey}
             onChange={e => setReceiverPubKey(e.target.value)}
             style={{ width: '100%' }}
-            placeholder="0x04..."
+            placeholder="0x..."
           />
           {errors.receiverPubKey && <span style={{ color: 'red' }}>{errors.receiverPubKey}</span>}
         </div>
@@ -369,7 +339,6 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
             title="Refresh"
             aria-label="Refresh"
           >
-            {/* Unicode circle arrow right */}
             {"\u21BB"}
           </button>
         </div>
