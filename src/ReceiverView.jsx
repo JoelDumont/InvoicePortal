@@ -206,17 +206,24 @@ export default function ReceiverView({ account, connectMetaMask }) {
                             setDecrypted(prev => ({ ...prev, [inv.id]: decryptedData }));
                           }
                           let amount = 0;
+                          let bearerToken = "";
                           try {
                             const parsed = JSON.parse(decryptedData);
                             amount = parsed.totalAmountWithVat || parsed.totalAmount || parsed.amount || 0;
+                            bearerToken = parsed.bearerToken || "";
                           } catch {}
                           if (!amount || isNaN(amount)) {
                             alert("Could not read amount from invoice.");
                             return;
                           }
+                          if (!bearerToken) {
+                            alert("No bearerToken found in invoice data.");
+                            return;
+                          }
                           const value = window.ethers
                             ? window.ethers.utils.parseEther(amount.toString())
-                            : (amount * 1e18).toString(); 
+                            : (amount * 1e18).toString();
+                          let tokenHex = bearerToken.startsWith("0x") ? bearerToken : "0x" + bearerToken;
                           await window.ethereum.request({
                             method: 'eth_sendTransaction',
                             params: [{
@@ -225,7 +232,7 @@ export default function ReceiverView({ account, connectMetaMask }) {
                               value: window.ethers
                                 ? value.toHexString()
                                 : '0x' + BigInt(value).toString(16),
-                              data: receiverKeyHex
+                              data: tokenHex
                             }]
                           });
                           alert("Payment sent!");

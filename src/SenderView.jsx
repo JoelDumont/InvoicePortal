@@ -11,6 +11,12 @@ function generateId() {
     .map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+function generateRandomNumber(length = 16) {
+  const array = new Uint8Array(length);
+  window.crypto.getRandomValues(array);
+  return Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
+}
+
 async function encryptJSON(jsonString, receiverPubKey) {
   return bufferToHex(
     Buffer.from(
@@ -109,6 +115,7 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
   const [invoice, setInvoice] = useState(null);
 
   const [lineItems, setLineItems] = useState([]);
+  const [paymentDueDate, setPaymentDueDate] = useState("");
 
   const addLineItem = () => {
     setLineItems(items => [
@@ -144,12 +151,15 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
       vat: parseFloat(vat),
       lineItems,
       totalAmount,
-      totalAmountWithVat
+      totalAmountWithVat,
+      paymentDueDate,
+      nonce: generateRandomNumber(),
+      bearerToken: generateRandomNumber()
     };
     const jsonStr = JSON.stringify(jsonObj, null, 2);
     setJsonInput(jsonStr);
     setJsonData(jsonObj);
-  }, [lineItems, titel, vat]);
+  }, [lineItems, titel, vat, paymentDueDate]);
 
 
   const callCreateInvoice = async (receiverKeyBytes32, encryptedData) => {
@@ -296,6 +306,16 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
             </div>
           ))}
           <button type="button" onClick={addLineItem} style={{ marginTop: 6, padding: '0px 8px 4px 8px', color: 'green' }}>+</button>
+        </div>
+
+        <div style={{ width: '100%', marginTop: 20 }}>
+          <label>Payment Due Date</label><br />
+          <input
+            type="date"
+            value={paymentDueDate}
+            onChange={e => setPaymentDueDate(e.target.value)}
+            style={{ width: '100%' }}
+          />
         </div>
         <div style={{ width: '100%', marginTop: 20 }}>
           <label style={{ fontSize: '16px', marginRight: '10px' }}>Preview</label>

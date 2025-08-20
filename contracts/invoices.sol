@@ -5,16 +5,15 @@ contract SecureInvoiceVault {
     struct Invoice {
         bytes32 id;
         address sender;
-        bytes32 receiverKey; // X25519 public key for encryption
-        bytes encryptedData; // Encrypted data
+        bytes32 receiverKey;
+        bytes encryptedData;
         uint256 timestamp;
     }
 
     mapping(bytes32 => Invoice) private invoices;
     mapping(address => bytes32[]) private sentInvoices;
-    mapping(bytes32 => bytes32[]) private receivedInvoices; // Keyed by receiverKey
+    mapping(bytes32 => bytes32[]) private receivedInvoices;
 
-    // Limit to prevent spam/DoS
     uint256 constant MAX_INVOICES_PER_ADDRESS = 100;
 
     event InvoiceCreated(bytes32 id, address indexed sender, bytes32 indexed receiverKey);
@@ -47,7 +46,6 @@ contract SecureInvoiceVault {
         return sentInvoices[msg.sender];
     }
 
-    // Public: Anyone can query invoices for a key (lists are public, data encrypted)
     function getReceivedInvoices(bytes32 receiverKey) external view returns (bytes32[] memory) {
         return receivedInvoices[receiverKey];
     }
@@ -67,7 +65,6 @@ contract SecureInvoiceVault {
         return result;
     }
 
-    // Public: Anyone can query invoices for a key
     function getInvoicesForReceiver(bytes32 receiverKey, uint256 start, uint256 count) external view returns (Invoice[] memory) {
         bytes32[] memory recvIds = receivedInvoices[receiverKey];
         uint256 length = recvIds.length;
@@ -83,7 +80,6 @@ contract SecureInvoiceVault {
         return result;
     }
 
-    // Public: Anyone can view (data encrypted)
     function getInvoice(bytes32 id) external view returns (Invoice memory) {
         return invoices[id];
     }
