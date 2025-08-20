@@ -17,6 +17,13 @@ function generateRandomNumber(length = 16) {
   return Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
 }
 
+// Replace generateRandomNumber for bearerToken with a function that generates a hex value of desired length
+function generateBearerTokenHex(length = 32) {
+  const array = new Uint8Array(length);
+  window.crypto.getRandomValues(array);
+  return '0x' + Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
+}
+
 async function encryptJSON(jsonString, receiverPubKey) {
   return bufferToHex(
     Buffer.from(
@@ -105,6 +112,7 @@ const CONTRACT_ABI = [
 ];
 const CONTRACT_ADDRESS = import.meta.env.VITE_SMART_CONTRACT_ADDRESS;
 const CHAIN_ID = import.meta.env.VITE_CHAIN_ID;
+const ETHERSCAN_API_KEY = import.meta.env.VITE_MOONSCAN_API_KEY;
 
 export default function SenderView({ account, setAccount, connectMetaMask, jsonData, setJsonData }) {
   const [receiverPubKey, setReceiverPubKey] = useState("");
@@ -154,7 +162,7 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
       totalAmountWithVat,
       paymentDueDate,
       nonce: generateRandomNumber(),
-      bearerToken: generateRandomNumber()
+      bearerToken: generateBearerTokenHex() // <-- hex value as bearerToken
     };
     const jsonStr = JSON.stringify(jsonObj, null, 2);
     setJsonInput(jsonStr);
@@ -186,6 +194,43 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
     await contract.createInvoice(receiverKeyBytes32, encryptedData);
   };
 
+  // Helper to store invoice info in localStorage
+  function storeInvoiceLocally(bearerToken, totalAmount, paymentDueDate) {
+    const key = 'localInvoices';
+    const invoices = JSON.parse(localStorage.getItem(key) || '[]');
+    invoices.push({ bearerToken, totalAmount, paymentDueDate });
+    localStorage.setItem(key, JSON.stringify(invoices));
+  }
+
+  // Helper to get all locally stored invoices
+  function getLocalInvoices() {
+    return JSON.parse(localStorage.getItem('localInvoices') || '[]');
+  }
+
+  // Helper to fetch incoming payments from Moonscan (Moonbase Alpha)
+  async function getIncomingPayments(account, bearerTokens) {
+    const chainId = parseInt(CHAIN_ID, 16);
+    const url = `https://api.etherscan.io/v2/api?chainid=${chainId}&module=account&action=txlist&address=${account}&sort=desc&apikey=${ETHERSCAN_API_KEY}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!data.result) return [];
+
+    // Filter incoming txs with a matching bearerToken in the data field
+    return data.result
+      .filter(tx =>
+        tx.to && tx.to.toLowerCase() === account.toLowerCase() &&
+        tx.input &&
+        bearerTokens.some(token => tx.input.toLowerCase().includes(token.toLowerCase()))
+      )
+      .map(tx => ({
+        txHash: tx.hash,
+        from: tx.from,
+        amount: ethers.utils.formatEther(tx.value),
+        bearerToken: bearerTokens.find(token => tx.input.toLowerCase().includes(token.toLowerCase())),
+        timestamp: tx.timeStamp // unix timestamp as string
+      }));
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     const newErrors = {};
@@ -202,6 +247,9 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
 
         const receiverKeyInBytes = receiverPubKey;
 
+        // Store invoice info locally
+        storeInvoiceLocally(jsonData.bearerToken, jsonData.totalAmountWithVat, jsonData.paymentDueDate);
+
         await callCreateInvoice(receiverKeyInBytes, encryptedDataBuffer);
         alert("Invoice created, encrypted and sent to the smart contract!");
       } catch (err) {
@@ -210,17 +258,9 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
     }
   };
 
-  function base64ToBytes32Hex(base64) {
-    const raw = atob(base64); 
-    let hex = '0x';
-    for (let i = 0; i < raw.length; i++) {
-      hex += raw.charCodeAt(i).toString(16).padStart(2, '0');
-    }
-    return hex;
-  }
-
   const [sentInvoices, setSentInvoices] = useState([]);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
+  const [paymentsSummary, setPaymentsSummary] = useState([]); // [{bearerToken, sum, paymentDueDate}]
 
   const handleLoadSentInvoices = async () => {
     if (!account) {
@@ -235,10 +275,28 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
       const start = 0;
       const count = 20;
       const invoices = await contract.getInvoicesForSender(start, count);
-
-
       setSentInvoices(invoices);
 
+      // Load local invoices and fetch payments for their bearerTokens
+      const localInvoices = getLocalInvoices();
+      const bearerTokens = localInvoices.map(inv => inv.bearerToken);
+      const payments = await getIncomingPayments(account, bearerTokens);
+
+      // Summarize payments by bearerToken
+      const summary = bearerTokens.map(token => {
+        const invoice = localInvoices.find(inv => inv.bearerToken === token);
+        const sum = payments
+          .filter(p => p.bearerToken === token)
+          .reduce((acc, p) => acc + parseFloat(p.amount), 0);
+        return {
+          invoiceId: invoice && invoice.id ? invoice.id : "", // Add invoiceId if available
+          bearerToken: token,
+          paymentDueDate: invoice ? invoice.paymentDueDate : "",
+          totalAmount: invoice ? invoice.totalAmount : "",
+          sum: sum
+        };
+      });
+      setPaymentsSummary(summary);
     } catch (err) {
       alert("Error loading sent invoices: " + (err?.message || err));
     }
@@ -365,40 +423,38 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
         {loadingInvoices ? (
           <div>Loading...</div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, marginTop: 12 }}>
-            <thead>
-              <tr>
-                <th style={{ borderBottom: '1px solid #ccc' }}>Invoice ID</th>
-                <th style={{ borderBottom: '1px solid #ccc' }}>Receiver Key</th>
-                <th style={{ borderBottom: '1px solid #ccc' }}>Timestamp</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sentInvoices.map(inv => (
-                <tr key={inv.id}>
-                  <td
-                    style={{ borderBottom: '1px solid #eee', minWidth: 80, cursor: 'pointer' }}
-                    title={typeof inv.id === "string" ? inv.id : ""}
-                  >
-                    {typeof inv.id === "string"
-                      ? `${inv.id.slice(0, 4)}...${inv.id.slice(-2)}`
-                      : ""}
-                  </td>
-                  <td
-                    style={{ borderBottom: '1px solid #eee', minWidth: 80, cursor: 'pointer' }}
-                    title={typeof inv.receiverKey === "string" ? inv.receiverKey : ""}
-                  >
-                    {typeof inv.receiverKey === "string"
-                      ? `${inv.receiverKey.slice(0, 4)}...${inv.receiverKey.slice(-2)}`
-                      : ""}
-                  </td>
-                  <td style={{ borderBottom: '1px solid #eee' }}>
-                    {inv.timestamp ? new Date(Number(inv.timestamp) * 1000).toLocaleString() : ""}
-                  </td>
+          <>
+            {/* Only show Incoming Payments Summary table */}
+            <h4 style={{ marginTop: 30 }}>Incoming Payments Summary</h4>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, marginTop: 8 }}>
+              <thead>
+                <tr>
+                  {/* Removed Invoice ID column */}
+                  <th style={{ borderBottom: '1px solid #ccc' }}>Bearer Token</th>
+                  <th style={{ borderBottom: '1px solid #ccc' }}>Payment Due Date</th>
+                  <th style={{ borderBottom: '1px solid #ccc' }}>Invoice Amount</th>
+                  <th style={{ borderBottom: '1px solid #ccc' }}>Total Received</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {paymentsSummary.map((p, idx) => (
+                  <tr key={p.bearerToken + idx}>
+                    <td
+                      style={{ borderBottom: '1px solid #eee', wordBreak: 'break-all', maxWidth: 180, cursor: 'pointer' }}
+                      title={p.bearerToken}
+                    >
+                      {typeof p.bearerToken === "string" && p.bearerToken.length > 12
+                        ? `${p.bearerToken.slice(0, 6)}...${p.bearerToken.slice(-6)}`
+                        : p.bearerToken}
+                    </td>
+                    <td style={{ borderBottom: '1px solid #eee' }}>{p.paymentDueDate}</td>
+                    <td style={{ borderBottom: '1px solid #eee' }}>{p.totalAmount}</td>
+                    <td style={{ borderBottom: '1px solid #eee' }}>{p.sum}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
         )}
       </div>
     </div>
