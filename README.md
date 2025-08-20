@@ -10,7 +10,7 @@ This project is a decentralized web application (dApp) for securely creating, en
 - Invoices can be paid directly via MetaMask.
 - No central storage – everything is handled via smart contract and wallet.
 
-**Live on Monbase Alpha Testnet:**  
+**Live on Moonbeam:**  
 👉 [invoicingportal](https://invoicingportal.netlify.app)
 
 **Note:**  
@@ -20,7 +20,3 @@ The app currently runs on an Moonbase (Testnet of Moonbeam). MetaMask is require
 
 ![image](./docs/concept.png)
 
-
-**TODO**
-* Baerer-Token stinstead of Recipient-Key
-* Nonce 
