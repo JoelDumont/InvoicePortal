@@ -139,7 +139,6 @@ export default function ReceiverView({ account, connectMetaMask }) {
             </button>
           ) : (
             <>
-              {/* QR code with hex public key */}
               <QRCodeSVG value={receiverKeyHex} size={180} />
               <div style={{ display: 'flex', justifyContent: 'center', marginTop: 10 }}>
                 <input

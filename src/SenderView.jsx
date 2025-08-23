@@ -6,19 +6,7 @@ import { bufferToHex } from 'ethereumjs-util';
 
 const ENCRYPTION_VERSION = 'x25519-xsalsa20-poly1305'
 
-function generateId() {
-  return '0x' + Array.from(crypto.getRandomValues(new Uint8Array(32)))
-    .map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-function generateRandomNumber(length = 16) {
-  const array = new Uint8Array(length);
-  window.crypto.getRandomValues(array);
-  return Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
-}
-
-// Replace generateRandomNumber for bearerToken with a function that generates a hex value of desired length
-function generateBearerTokenHex(length = 32) {
+function generateInvoiceReference(length = 32) {
   const array = new Uint8Array(length);
   window.crypto.getRandomValues(array);
   return '0x' + Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
@@ -120,8 +108,6 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
   const [vat, setVat] = useState("8.1"); 
   const [jsonInput, setJsonInput] = useState("");
   const [errors, setErrors] = useState({});
-  const [invoice, setInvoice] = useState(null);
-
   const [lineItems, setLineItems] = useState([]);
   const [paymentDueDate, setPaymentDueDate] = useState("");
 
@@ -161,8 +147,7 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
       totalAmount,
       totalAmountWithVat,
       paymentDueDate,
-      nonce: generateRandomNumber(),
-      bearerToken: generateBearerTokenHex() // <-- hex value as bearerToken
+      invoiceReference: generateInvoiceReference() 
     };
     const jsonStr = JSON.stringify(jsonObj, null, 2);
     setJsonInput(jsonStr);
@@ -194,40 +179,36 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
     await contract.createInvoice(receiverKeyBytes32, encryptedData);
   };
 
-  // Helper to store invoice info in localStorage
-  function storeInvoiceLocally(bearerToken, totalAmount, paymentDueDate) {
+  function storeInvoiceLocally(invoiceReference, totalAmount, paymentDueDate) {
     const key = 'localInvoices';
     const invoices = JSON.parse(localStorage.getItem(key) || '[]');
-    invoices.push({ bearerToken, totalAmount, paymentDueDate });
+    invoices.push({ invoiceReference, totalAmount, paymentDueDate });
     localStorage.setItem(key, JSON.stringify(invoices));
   }
 
-  // Helper to get all locally stored invoices
   function getLocalInvoices() {
     return JSON.parse(localStorage.getItem('localInvoices') || '[]');
   }
 
-  // Helper to fetch incoming payments from Moonscan (Moonbase Alpha)
-  async function getIncomingPayments(account, bearerTokens) {
+  async function getIncomingPayments(account, invoiceReferences) {
     const chainId = parseInt(CHAIN_ID, 16);
     const url = `https://api.etherscan.io/v2/api?chainid=${chainId}&module=account&action=txlist&address=${account}&sort=desc&apikey=${ETHERSCAN_API_KEY}`;
     const res = await fetch(url);
     const data = await res.json();
     if (!data.result) return [];
 
-    // Filter incoming txs with a matching bearerToken in the data field
     return data.result
       .filter(tx =>
         tx.to && tx.to.toLowerCase() === account.toLowerCase() &&
         tx.input &&
-        bearerTokens.some(token => tx.input.toLowerCase().includes(token.toLowerCase()))
+        invoiceReferences.some(ref => tx.input.toLowerCase().includes(ref.toLowerCase()))
       )
       .map(tx => ({
         txHash: tx.hash,
         from: tx.from,
         amount: ethers.utils.formatEther(tx.value),
-        bearerToken: bearerTokens.find(token => tx.input.toLowerCase().includes(token.toLowerCase())),
-        timestamp: tx.timeStamp // unix timestamp as string
+        invoiceReference: invoiceReferences.find(ref => tx.input.toLowerCase().includes(ref.toLowerCase())),
+        timestamp: tx.timeStamp
       }));
   }
 
@@ -247,8 +228,7 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
 
         const receiverKeyInBytes = receiverPubKey;
 
-        // Store invoice info locally
-        storeInvoiceLocally(jsonData.bearerToken, jsonData.totalAmountWithVat, jsonData.paymentDueDate);
+        storeInvoiceLocally(jsonData.invoiceReference, jsonData.totalAmountWithVat, jsonData.paymentDueDate);
 
         await callCreateInvoice(receiverKeyInBytes, encryptedDataBuffer);
         alert("Invoice created, encrypted and sent to the smart contract!");
@@ -260,7 +240,7 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
 
   const [sentInvoices, setSentInvoices] = useState([]);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
-  const [paymentsSummary, setPaymentsSummary] = useState([]); // [{bearerToken, sum, paymentDueDate}]
+  const [paymentsSummary, setPaymentsSummary] = useState([]); 
 
   const handleLoadSentInvoices = async () => {
     if (!account) {
@@ -277,20 +257,17 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
       const invoices = await contract.getInvoicesForSender(start, count);
       setSentInvoices(invoices);
 
-      // Load local invoices and fetch payments for their bearerTokens
       const localInvoices = getLocalInvoices();
-      const bearerTokens = localInvoices.map(inv => inv.bearerToken);
-      const payments = await getIncomingPayments(account, bearerTokens);
+      const invoiceReferences = localInvoices.map(inv => inv.invoiceReference);
+      const payments = await getIncomingPayments(account, invoiceReferences);
 
-      // Summarize payments by bearerToken
-      const summary = bearerTokens.map(token => {
-        const invoice = localInvoices.find(inv => inv.bearerToken === token);
+      const summary = invoiceReferences.map(ref => {
+        const invoice = localInvoices.find(inv => inv.invoiceReference === ref);
         const sum = payments
-          .filter(p => p.bearerToken === token)
+          .filter(p => p.invoiceReference === ref)
           .reduce((acc, p) => acc + parseFloat(p.amount), 0);
         return {
-          invoiceId: invoice && invoice.id ? invoice.id : "", // Add invoiceId if available
-          bearerToken: token,
+          invoiceReference: ref,
           paymentDueDate: invoice ? invoice.paymentDueDate : "",
           totalAmount: invoice ? invoice.totalAmount : "",
           sum: sum
@@ -424,13 +401,11 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
           <div>Loading...</div>
         ) : (
           <>
-            {/* Only show Incoming Payments Summary table */}
             <h4 style={{ marginTop: 30 }}>Incoming Payments Summary</h4>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, marginTop: 8 }}>
               <thead>
                 <tr>
-                  {/* Removed Invoice ID column */}
-                  <th style={{ borderBottom: '1px solid #ccc' }}>Bearer Token</th>
+                  <th style={{ borderBottom: '1px solid #ccc' }}>Invoice Reference</th>
                   <th style={{ borderBottom: '1px solid #ccc' }}>Payment Due Date</th>
                   <th style={{ borderBottom: '1px solid #ccc' }}>Invoice Amount</th>
                   <th style={{ borderBottom: '1px solid #ccc' }}>Total Received</th>
@@ -438,14 +413,14 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
               </thead>
               <tbody>
                 {paymentsSummary.map((p, idx) => (
-                  <tr key={p.bearerToken + idx}>
+                  <tr key={p.invoiceReference + idx}>
                     <td
                       style={{ borderBottom: '1px solid #eee', wordBreak: 'break-all', maxWidth: 180, cursor: 'pointer' }}
-                      title={p.bearerToken}
+                      title={p.invoiceReference}
                     >
-                      {typeof p.bearerToken === "string" && p.bearerToken.length > 12
-                        ? `${p.bearerToken.slice(0, 6)}...${p.bearerToken.slice(-6)}`
-                        : p.bearerToken}
+                      {typeof p.invoiceReference === "string" && p.invoiceReference.length > 12
+                        ? `${p.invoiceReference.slice(0, 6)}...${p.invoiceReference.slice(-6)}`
+                        : p.invoiceReference}
                     </td>
                     <td style={{ borderBottom: '1px solid #eee' }}>{p.paymentDueDate}</td>
                     <td style={{ borderBottom: '1px solid #eee' }}>{p.totalAmount}</td>
