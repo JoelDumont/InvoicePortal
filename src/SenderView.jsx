@@ -376,7 +376,7 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
 
       <div style={{ marginTop: 40, width: 700 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-          <h3 style={{ margin: 0 }}>Sent Invoices</h3>
+          <h3 style={{ margin: 0 }}>Invoices</h3>
           <button
             onClick={handleLoadSentInvoices}
             style={{
