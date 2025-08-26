@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Invoice on a Blockchain</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/impress.js/0.5.3/impress-demo.css">
+  <style>
+    body {
+      background: #181818;
+      color: #f0f0f0;
+    }
+    #impress .step {
+      width: 900px !important;
+      height: 600px !important;
+      font-size: 1.5em;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+    h1, h2, p {
+      color: #f0f0f0;
+    }
+  </style>
+</head>
+<body>
+<div id="impress">
+   <div class="step" data-x="-1200" data-y="0">
+    <h1>Invoice on a Blockchain</h1>
+    <ul>
+      <li>Do we need a Blockchain?</li>
+      <li>Concept</li>
+      <li>Proof of Concept (Demo)</li>
+      <li>Insights</li>
+    </ul>
+  </div>
+  <div class="step" data-x="0" data-y="0">
+    <h1>Do we need a blockchain?</h1>
+    <img src="do-we-need-a-blockchain.png" alt="Do we need a blockchain" style="max-width:700px;display:block;margin:20px auto;">
+  </div>
+  <div class="step" data-x="1200" data-y="0">
+    <h2>Concept</h2>
+    <img src="concept.png" alt="Konzept" style="max-width:700px;display:block;margin:20px auto;">
+  </div>
+  <div class="step" data-x="1200" data-y="1200">
+    <div>
+      <iframe src="https://invoicingportal.netlify.app" frameborder="0" allowfullscreen="true" style="width:700px;height:600px;"></iframe>
+    </div>
+  </div>
+  <div class="step" data-x="2400" data-y="1200">
+    <h2>Fees</h2>
+    <table style="width:100%;margin:30px 0;border-collapse:collapse;background:#222;color:#f0f0f0;">
+      <thead>
+        <tr style="background:#333;">
+          <th style="padding:8px;border:1px solid #444;">Netzwerk</th>
+          <th style="padding:8px;border:1px solid #444;">Chain ID</th>
+          <th style="padding:8px;border:1px solid #444;">Contract creation</th>
+          <th style="padding:8px;border:1px solid #444;">Invoice creation</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="padding:8px;border:1px solid #444;">Ethereum</td>
+          <td style="padding:8px;border:1px solid #444;">0x1</td>
+          <td style="padding:8px;border:1px solid #444;">0.002 ETH<br>(ca. 8.73 $)</td>
+          <td style="padding:8px;border:1px solid #444;">0.00230873 ETH<br>(ca. 10 $)</td>
+        </tr>
+        <tr>
+          <td style="padding:8px;border:1px solid #444;">Moonbeam</td>
+          <td style="padding:8px;border:1px solid #444;">0x504</td>
+          <td style="padding:8px;border:1px solid #444;">0.072674 GLMR<br>(ca. 0.01 $)</td>
+          <td style="padding:8px;border:1px solid #444;">0.03582225 GLMR<br>(ca. 0.003 $)</td>
+        </tr>
+        <tr>
+          <td style="padding:8px;border:1px solid #444;">Polygon</td>
+          <td style="padding:8px;border:1px solid #444;">0x89</td>
+          <td style="padding:8px;border:1px solid #444;">0.045 POL<br>(ca. 0.01 $)</td>
+          <td style="padding:8px;border:1px solid #444;">0.01905 POL<br>(ca. 0.005 $)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="step" data-x="3600" data-y="1200">
+    <h2>Insights</h2>
+    <ul>
+      <li>Native token</li>
+      <li>Trust sender address</li>
+      <li>State bloat</li>
+      <li>Spam</li>
+    </ul>
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/impress.js/0.5.3/impress.min.js"></script>
+<script>impress().init();</script>
+</body>
+</html>
