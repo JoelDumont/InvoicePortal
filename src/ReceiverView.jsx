@@ -1,35 +1,10 @@
 import { useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import { ethers } from 'ethers'
+import CONTRACT_ABI from '../contracts/ABI.json'
 
 const CONTRACT_ADDRESS = import.meta.env.VITE_SMART_CONTRACT_ADDRESS;
 const CHAIN_ID = import.meta.env.VITE_CHAIN_ID;
-const CONTRACT_ABI = [
-  {
-    "inputs": [
-      { "internalType": "bytes32", "name": "receiverKey", "type": "bytes32" },
-      { "internalType": "uint256", "name": "start", "type": "uint256" },
-      { "internalType": "uint256", "name": "count", "type": "uint256" }
-    ],
-    "name": "getInvoicesForReceiver",
-    "outputs": [
-      {
-        "components": [
-          { "internalType": "bytes32", "name": "id", "type": "bytes32" },
-          { "internalType": "address", "name": "sender", "type": "address" },
-          { "internalType": "bytes32", "name": "receiverKey", "type": "bytes32" },
-          { "internalType": "bytes", "name": "encryptedData", "type": "bytes" },
-          { "internalType": "uint256", "name": "timestamp", "type": "uint256" }
-        ],
-        "internalType": "struct SecureInvoiceVault.Invoice[]",
-        "name": "",
-        "type": "tuple[]"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  }
-];
 
 export default function ReceiverView({ account, connectMetaMask }) {
   const [publicKey, setPublicKey] = useState('');
@@ -76,7 +51,7 @@ export default function ReceiverView({ account, connectMetaMask }) {
       encryptedData: typeof inv.encryptedData === "string"
         ? inv.encryptedData
         : "0x" + Buffer.from(inv.encryptedData).toString("hex"),
-      timestamp: inv.timestamp.toString()
+      hash: inv.hash
     }));
   }
 
@@ -164,6 +139,7 @@ export default function ReceiverView({ account, connectMetaMask }) {
                 <th style={{ borderBottom: '1px solid #ccc' }}>Sender</th>
                 <th style={{ borderBottom: '1px solid #ccc' }}>Verify</th>
                 <th style={{ borderBottom: '1px solid #ccc' }}>Pay</th>
+                <th style={{ borderBottom: '1px solid #ccc' }}>Hash</th>
               </tr>
             </thead>
             <tbody>
@@ -242,6 +218,9 @@ export default function ReceiverView({ account, connectMetaMask }) {
                     >
                       Pay
                     </button>
+                  </td>
+                  <td style={{ borderBottom: '1px solid #eee', wordBreak: 'break-all', maxWidth: 180 }}>
+                    {inv.hash ? `${inv.hash.slice(0, 8)}...${inv.hash.slice(-6)}` : ""}
                   </td>
                 </tr>
               ))}

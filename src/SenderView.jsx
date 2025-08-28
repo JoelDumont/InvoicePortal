@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { ethers } from 'ethers'
 import { encrypt } from '@metamask/eth-sig-util';
 import { bufferToHex } from 'ethereumjs-util';
+import CONTRACT_ABI from '../contracts/ABI.json';
 
 const ENCRYPTION_VERSION = 'x25519-xsalsa20-poly1305'
 
@@ -10,6 +11,12 @@ function generateInvoiceReference(length = 32) {
   const array = new Uint8Array(length);
   window.crypto.getRandomValues(array);
   return '0x' + Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function generateNonce(length = 16) {
+  const array = new Uint8Array(length);
+  window.crypto.getRandomValues(array);
+  return Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
 }
 
 async function encryptJSON(jsonString, receiverPubKey) {
@@ -27,77 +34,6 @@ async function encryptJSON(jsonString, receiverPubKey) {
   );
 }
 
-const CONTRACT_ABI = [
-	{
-		"inputs": [
-			{
-				"internalType": "bytes32",
-				"name": "receiverKey",
-				"type": "bytes32"
-			},
-			{
-				"internalType": "bytes",
-				"name": "encryptedData",
-				"type": "bytes"
-			}
-		],
-		"name": "createInvoice",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "uint256",
-				"name": "start",
-				"type": "uint256"
-			},
-			{
-				"internalType": "uint256",
-				"name": "count",
-				"type": "uint256"
-			}
-		],
-		"name": "getInvoicesForSender",
-		"outputs": [
-			{
-				"components": [
-					{
-						"internalType": "bytes32",
-						"name": "id",
-						"type": "bytes32"
-					},
-					{
-						"internalType": "address",
-						"name": "sender",
-						"type": "address"
-					},
-					{
-						"internalType": "bytes32",
-						"name": "receiverKey",
-						"type": "bytes32"
-					},
-					{
-						"internalType": "bytes",
-						"name": "encryptedData",
-						"type": "bytes"
-					},
-					{
-						"internalType": "uint256",
-						"name": "timestamp",
-						"type": "uint256"
-					}
-				],
-				"internalType": "struct SecureInvoiceVault.Invoice[]",
-				"name": "",
-				"type": "tuple[]"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	}
-];
 const CONTRACT_ADDRESS = import.meta.env.VITE_SMART_CONTRACT_ADDRESS;
 const CHAIN_ID = import.meta.env.VITE_CHAIN_ID;
 const ETHERSCAN_API_KEY = import.meta.env.VITE_MOONSCAN_API_KEY;
@@ -147,7 +83,8 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
       totalAmount,
       totalAmountWithVat,
       paymentDueDate,
-      invoiceReference: generateInvoiceReference() 
+      invoiceReference: generateInvoiceReference(),
+      nonce: generateNonce()
     };
     const jsonStr = JSON.stringify(jsonObj, null, 2);
     setJsonInput(jsonStr);
@@ -155,9 +92,13 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
   }, [lineItems, titel, vat, paymentDueDate]);
 
 
-  const callCreateInvoice = async (receiverKeyBytes32, encryptedData) => {
+  const callCreateInvoice = async (receiverKeyBytes32, encryptedData, hash) => {
     if (!window.ethereum) {
       alert("MetaMask is not installed.");
+      return;
+    }
+    if (!CONTRACT_ADDRESS || CONTRACT_ADDRESS.length < 42) {
+      alert("Smart contract address is not set or invalid.");
       return;
     }
     try {
@@ -172,11 +113,11 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
       }
     }
     const ethers = (await import('ethers')).ethers;
-    const provider = new ethers.providers.Web3Provider(window.ethereum)
+    const provider = new ethers.providers.Web3Provider(window.ethereum, 'any');
     const signer = await provider.getSigner();
     const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
 
-    await contract.createInvoice(receiverKeyBytes32, encryptedData);
+    await contract.createInvoice(receiverKeyBytes32, encryptedData, hash);
   };
 
   function storeInvoiceLocally(invoiceReference, totalAmount, paymentDueDate) {
@@ -195,7 +136,7 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
     const url = `https://api.etherscan.io/v2/api?chainid=${chainId}&module=account&action=txlist&address=${account}&sort=desc&apikey=${ETHERSCAN_API_KEY}`;
     const res = await fetch(url);
     const data = await res.json();
-    if (!data.result) return [];
+    if (!Array.isArray(data.result)) return [];
 
     return data.result
       .filter(tx =>
@@ -224,13 +165,17 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
         }
         const receiverPubKeyBase64 = hexToBase64(receiverPubKey);
 
+        const ethersLib = (await import('ethers')).ethers;
+        const hash = ethersLib.utils.keccak256(ethersLib.utils.toUtf8Bytes(jsonInput));
+
         const encryptedDataBuffer = await encryptJSON(jsonInput, receiverPubKeyBase64);
 
         const receiverKeyInBytes = receiverPubKey;
 
+        await callCreateInvoice(receiverKeyInBytes, encryptedDataBuffer, hash);
+
         storeInvoiceLocally(jsonData.invoiceReference, jsonData.totalAmountWithVat, jsonData.paymentDueDate);
 
-        await callCreateInvoice(receiverKeyInBytes, encryptedDataBuffer);
         alert("Invoice created, encrypted and sent to the smart contract!");
       } catch (err) {
         alert("Error creating or sending: " + (err?.message || err));
@@ -409,24 +354,35 @@ export default function SenderView({ account, setAccount, connectMetaMask, jsonD
                   <th style={{ borderBottom: '1px solid #ccc' }}>Payment Due Date</th>
                   <th style={{ borderBottom: '1px solid #ccc' }}>Invoice Amount</th>
                   <th style={{ borderBottom: '1px solid #ccc' }}>Total Received</th>
+                  <th style={{ borderBottom: '1px solid #ccc' }}>Hash</th>
                 </tr>
               </thead>
               <tbody>
-                {paymentsSummary.map((p, idx) => (
-                  <tr key={p.invoiceReference + idx}>
-                    <td
-                      style={{ borderBottom: '1px solid #eee', wordBreak: 'break-all', maxWidth: 180, cursor: 'pointer' }}
-                      title={p.invoiceReference}
-                    >
-                      {typeof p.invoiceReference === "string" && p.invoiceReference.length > 12
-                        ? `${p.invoiceReference.slice(0, 6)}...${p.invoiceReference.slice(-6)}`
-                        : p.invoiceReference}
-                    </td>
-                    <td style={{ borderBottom: '1px solid #eee' }}>{p.paymentDueDate}</td>
-                    <td style={{ borderBottom: '1px solid #eee' }}>{p.totalAmount}</td>
-                    <td style={{ borderBottom: '1px solid #eee' }}>{p.sum}</td>
-                  </tr>
-                ))}
+                {getLocalInvoices().map((localInv, idx) => {
+                  const contractInv = sentInvoices[idx];
+                  return (
+                    <tr key={localInv.invoiceReference + idx}>
+                      <td
+                        style={{ borderBottom: '1px solid #eee', wordBreak: 'break-all', maxWidth: 180, cursor: 'pointer' }}
+                        title={localInv.invoiceReference}
+                      >
+                        {typeof localInv.invoiceReference === "string" && localInv.invoiceReference.length > 12
+                          ? `${localInv.invoiceReference.slice(0, 6)}...${localInv.invoiceReference.slice(-6)}`
+                          : localInv.invoiceReference}
+                      </td>
+                      <td style={{ borderBottom: '1px solid #eee' }}>{localInv.paymentDueDate}</td>
+                      <td style={{ borderBottom: '1px solid #eee' }}>{localInv.totalAmount}</td>
+                      <td style={{ borderBottom: '1px solid #eee' }}>
+                        {paymentsSummary[idx]?.sum}
+                      </td>
+                      <td style={{ borderBottom: '1px solid #eee' }}>
+                        {contractInv?.hash
+                          ? `${contractInv.hash.slice(0, 8)}...${contractInv.hash.slice(-6)}`
+                          : ""}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </>

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.30;
 
 contract SecureInvoiceVault {
     struct Invoice {
@@ -7,33 +7,31 @@ contract SecureInvoiceVault {
         address sender;
         bytes32 receiverKey;
         bytes encryptedData;
-        uint256 timestamp;
+        bytes32 hash;
     }
 
     mapping(bytes32 => Invoice) private invoices;
     mapping(address => bytes32[]) private sentInvoices;
     mapping(bytes32 => bytes32[]) private receivedInvoices;
 
-    uint256 constant MAX_INVOICES_PER_ADDRESS = 100;
-
     event InvoiceCreated(bytes32 id, address indexed sender, bytes32 indexed receiverKey);
 
     function createInvoice(
         bytes32 receiverKey,
-        bytes calldata encryptedData
+        bytes calldata encryptedData,
+        bytes32 hash
     ) external {
         require(receiverKey != bytes32(0), "Receiver key required");
-        require(receivedInvoices[receiverKey].length < MAX_INVOICES_PER_ADDRESS, "Receiver invoice limit reached");
-        require(sentInvoices[msg.sender].length < MAX_INVOICES_PER_ADDRESS, "Sender invoice limit reached");
+        require(hash != bytes32(0), "Hash required");
 
-        bytes32 id = keccak256(abi.encode(msg.sender, receiverKey, block.timestamp, encryptedData));
+        bytes32 id = keccak256(abi.encode(msg.sender, receiverKey, encryptedData));
 
         invoices[id] = Invoice({
             id: id,
             sender: msg.sender,
             receiverKey: receiverKey,
             encryptedData: encryptedData,
-            timestamp: block.timestamp
+            hash: hash
         });
 
         sentInvoices[msg.sender].push(id);
