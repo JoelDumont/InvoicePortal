@@ -1,6 +1,8 @@
 # Invoicing Portal – dApp
 
-<img src="public/invoicingPortal.png" alt="Invoicing Portal Logo" width="220" />
+<img src="public/DeBill.png" alt="Invoicing Portal Logo" width="220" />
+
+Decentraliced Billing Portal
 
 This project is a decentralized web application (dApp) for securely creating, encrypting, sending, and paying invoices on the Ethereum/Moonbeam blockchain.
 
@@ -14,7 +16,7 @@ This project is a decentralized web application (dApp) for securely creating, en
 👉 [invoicingportal](https://invoicingportal.netlify.app)
 
 **Note:**  
-The app currently runs on an Moonbase (Testnet of Moonbeam). MetaMask is required
+The app currently runs on Moonbeam and was developed on Moonbase Alpha. MetaMask is required
 
 **Concept:**
 
