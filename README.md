@@ -22,3 +22,8 @@ The app currently runs on Moonbeam and was developed on Moonbase Alpha. MetaMask
 
 ![image](./docs/concept.png)
 
+[🎬 Demo ansehen](public/demo.mp4)
+
+<video controls preload="metadata" width="800" poster="public/thumb-nail.png">
+  <source src="public/demo.mp4" type="video/mp4"/>
+</video>
