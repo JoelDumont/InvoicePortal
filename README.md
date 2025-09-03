@@ -1,3 +1,6 @@
+> ⚠️ **Disclaimer:** This application is for demonstration and experimentation purposes only.  
+> It is not intended for production use.
+
 # Invoicing Portal – dApp
 
 <img src="public/DeBill.png" alt="Invoicing Portal Logo" width="220" />
